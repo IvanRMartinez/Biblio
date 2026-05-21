@@ -6,43 +6,92 @@ namespace BiblioAPI.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class AuthController : ControllerBase
+    public class LibrosController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
 
-        public AuthController(ApplicationDbContext context)
+        public LibrosController(ApplicationDbContext context)
         {
             _context = context;
         }
 
-        [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] BiblioAPI.Models.LoginRequest request)
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<Libro>>> GetLibros()
         {
-            // 1. Validamos que el request traiga datos (aquí usamos las propiedades de tu LoginRequest)
-            if (string.IsNullOrEmpty(request.Correo) || string.IsNullOrEmpty(request.Contrasena))
-            {
-                return BadRequest(new { mensaje = "El correo y la contraseña son obligatorios." });
-            }
-
-            // 2. Buscamos usando los nombres EXACTOS del modelo de tu amigo (Correo y PasswordHash)
-            var usuario = await _context.Usuarios
-                .FirstOrDefaultAsync(u => u.Correo == request.Correo && u.PasswordHash == request.Contrasena);
-
-            // 3. Si no coincide ningún usuario
-            if (usuario == null)
-            {
-                return Unauthorized(new { mensaje = "Correo o contraseña incorrectos." });
-            }
-
-            // 4. Si todo está bien, respondemos con los datos reales de su MySQL
-            return Ok(new
-            {
-                id = usuario.Id,
-                username = usuario.Username,
-                nombre = usuario.NombreCompleto, // ?? Cambiado a NombreCompleto
-                correo = usuario.Correo,
-                rol = usuario.Rol // Esto devolverá "alumno" o "admin"
-            });
+            // Retorna la lista completa de libros directo de MySQL
+            return await _context.Libros.ToListAsync();
+            
         }
+
+        [HttpGet("{id}")]
+        public async Task<ActionResult<Libro>> GetLibro(int id)
+        {
+            var libro = await _context.Set<Libro>().FindAsync(id);
+
+            if (libro == null)
+            {
+                return NotFound(new { mensaje = $"El libro con ID {id} no existe." });
+            }
+
+            return libro;
+        }
+
+        [HttpPost]
+        public async Task<ActionResult<Libro>> PostLibro([FromBody] Libro libro)
+        {
+            // Validaciones básicas antes de insertar en MySQL
+            if (string.IsNullOrEmpty(libro.Titulo) || string.IsNullOrEmpty(libro.Autor))
+            {
+                return BadRequest(new { mensaje = "El título y el autor son obligatorios." });
+            }
+
+            libro.CreatedAt = DateTime.Now; // Asignamos la fecha de creación automáticamente
+
+            _context.Set<Libro>().Add(libro);
+            await _context.SaveChangesAsync();
+
+            return CreatedAtAction(nameof(GetLibro), new { id = libro.Id }, libro);
+        }
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> PutLibro(int id, [FromBody] Libro libroActualizado)
+        {
+            if (id != libroActualizado.Id)
+            {
+                return BadRequest(new { mensaje = "El ID del libro no coincide con el enviado en el cuerpo." });
+            }
+
+            // Buscamos el libro original en la base de datos
+            var libroExistente = await _context.Set<Libro>().FindAsync(id);
+            if (libroExistente == null)
+            {
+                return NotFound(new { mensaje = "Libro no encontrado para actualizar." });
+            }
+
+            // Actualizamos los campos uno por uno para no romper referencias
+            libroExistente.Titulo = libroActualizado.Titulo;
+            libroExistente.Autor = libroActualizado.Autor;
+            libroExistente.AnioPublicacion = libroActualizado.AnioPublicacion;
+            libroExistente.Editorial = libroActualizado.Editorial;
+            libroExistente.Categoria = libroActualizado.Categoria;
+            libroExistente.Isbn = libroActualizado.Isbn;
+            libroExistente.Idioma = libroActualizado.Idioma;
+            libroExistente.Paginas = libroActualizado.Paginas;
+            libroExistente.Resumen = libroActualizado.Resumen;
+            libroExistente.PortadaUrl = libroActualizado.PortadaUrl;
+            libroExistente.Ejemplares = libroActualizado.Ejemplares; // Clave para las estadísticas de la maestra
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return StatusCode(500, new { mensaje = "Error de concurrencia al actualizar el libro." });
+            }
+
+            return Ok(new { mensaje = "Libro actualizado con éxito.", libro = libroExistente });
+        }
+
     }
 }
