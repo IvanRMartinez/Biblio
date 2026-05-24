@@ -24,7 +24,7 @@ namespace BiblioAPI.Controllers
                 return BadRequest(new { mensaje = "El correo y la contraseña son obligatorios." });
             }
 
-            // 2. Buscamos usando los nombres EXACTOS del modelo de tu amigo (Correo y PasswordHash)
+            // 2. Buscamos usando los nombres EXACTOS (Correo y PasswordHash)
             var usuario = await _context.Usuarios
                 .FirstOrDefaultAsync(u => u.Correo == request.Correo && u.PasswordHash == request.Contrasena);
 
