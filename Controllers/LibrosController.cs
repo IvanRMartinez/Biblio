@@ -93,5 +93,20 @@ namespace BiblioAPI.Controllers
             return Ok(new { mensaje = "Libro actualizado con éxito.", libro = libroExistente });
         }
 
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteLibro(int id)
+        {
+            var libro = await _context.Set<Libro>().FindAsync(id);
+            if (libro == null)
+            {
+                return NotFound(new { mensaje = "El libro que deseas eliminar no existe." });
+            }
+
+            _context.Set<Libro>().Remove(libro);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { mensaje = $"El libro '{libro.Titulo}' fue eliminado correctamente." });
+        }
+
     }
 }
