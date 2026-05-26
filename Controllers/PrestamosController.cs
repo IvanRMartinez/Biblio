@@ -202,7 +202,37 @@ namespace BiblioAPI.Controllers
                 return StatusCode(500, new { error = "Error al procesar la devolución", detalles = ex.Message });
             }
         }
+
+        [HttpGet]
+        public async Task<IActionResult> GetTodosLosPrestamos()
+        {
+            try
+            {
+                // Traemos los préstamos ordenados por fecha más reciente
+                var prestamos = await _context.Set<Prestamo>()
+                    .OrderByDescending(p => p.FechaPrestamo)
+                    .Select(p => new
+                    {
+                        id = p.Id,
+                        usuarioId = p.UsuarioId,
+                        libroId = p.LibroId,
+                        titulo = p.Titulo ?? "Libro sin título",
+                        fechaPrestamo = p.FechaPrestamo,
+                        fechaDevolucion = p.FechaDevolucion,
+                        estado = p.Estado
+                    })
+                    .ToListAsync();
+
+                return Ok(prestamos);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = "Error al obtener la tabla de préstamos", detalles = ex.Message });
+            }
+        }
     }
+
+
 
     // ==========================================
     // CLASE DTO: OBJETO DE TRANSFERENCIA DE DATOS
