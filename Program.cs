@@ -3,10 +3,10 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// declaracion de los controladores para poder usarlos
 builder.Services.AddControllers();
 
-// ----- 1. REGISTRAR EL SERVICIO CORS (Justo aquí) -----
+// -----declaracion de los CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("PermitirReact", policy =>
@@ -18,7 +18,7 @@ builder.Services.AddCors(options =>
 });
 // -----------------------------------------------------
 
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+// declaracion de los Swaggers
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
