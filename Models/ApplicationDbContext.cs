@@ -25,14 +25,7 @@ public partial class ApplicationDbContext : DbContext
     public virtual DbSet<Usuario> Usuarios { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-    {
-        if (!optionsBuilder.IsConfigured)
-        {
-            optionsBuilder.UseMySql(
-                "name=ConnectionStrings:DefaultConnection",
-                Microsoft.EntityFrameworkCore.ServerVersion.Parse("8.0.44-mysql")
-            );
-        }
+    => optionsBuilder.UseMySql("name=ConnectionStrings:DefaultConnection", Microsoft.EntityFrameworkCore.ServerVersion.Parse("8.0.44-mysql"));
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
