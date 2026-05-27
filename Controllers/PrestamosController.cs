@@ -16,58 +16,53 @@ namespace BiblioAPI.Controllers
             _context = context;
         }
 
-        // ==========================================
-        // 1. ENDPOINT: SOLICITAR UN PRÉSTAMO
-        // ==========================================
+        
         [HttpPost]
         public async Task<IActionResult> CrearPrestamo([FromBody] SolicitudPrestamoDTO peticion)
         {
-            // CONTROL DE ERRORES GLOBAL: Si algo truena en la BD, el try-catch lo atrapa 
-            // y te dice exactamente qué pasó en lugar de dar un simple Error 500 genérico.
+            
             try
             {
-                // Paso A: Validar que los datos de entrada no vengan en cero o negativos
+                
                 if (peticion.UsuarioId <= 0 || peticion.LibroId <= 0)
                 {
                     return BadRequest(new { mensaje = "El ID de usuario y el ID de libro deben ser números válidos mayores a 0." });
                 }
 
-                // Paso B: Buscar el libro en MySQL para comprobar existencia y traer sus datos reales
+                
                 var libro = await _context.Set<Libro>().FindAsync(peticion.LibroId);
                 if (libro == null)
                 {
                     return NotFound(new { mensaje = $"Error: El libro con ID {peticion.LibroId} no existe en el catálogo." });
                 }
 
-                // Paso C: VALIDACIÓN DE INVENTARIO (Regla de la Maestra)
+                
                 if (libro.Ejemplares <= 0)
                 {
                     return BadRequest(new { mensaje = $"Inventario insuficiente. El libro '{libro.Titulo}' tiene 0 ejemplares disponibles." });
                 }
 
-                // Paso D: Restar un ejemplar del stock
+                
                 libro.Ejemplares -= 1;
 
-                // Paso E: Crear la entidad física 'Prestamo' resolviendo el misterio de los campos obligatorios.
-                // Como no modificamos el modelo original, le inyectamos los datos del libro que acabamos de buscar.
-                // Así, si la BD exige Titulo y Autor, aquí ya van llenos con la información correcta.
+                
                 var nuevoPrestamo = new Prestamo
                 {
                     UsuarioId = peticion.UsuarioId,
                     LibroId = peticion.LibroId,
                     FechaPrestamo = DateTime.Now,
-                    Estado = "Activo", // Asignamos el Estado obligatorio que pedía el validador
+                    Estado = "Activo", 
 
-                    // SOLUCIÓN AL DESFASE: Rellenamos estos campos por si el modelo original los exige como no-nulos
+                    
                     Titulo = libro.Titulo,
                     Autor = libro.Autor
                 };
 
-                // Paso F: Guardar cambios en la base de datos
+                
                 _context.Set<Prestamo>().Add(nuevoPrestamo);
                 await _context.SaveChangesAsync();
 
-                // Respuesta exitosa (200 OK)
+                
                 return Ok(new
                 {
                     mensaje = "¡Préstamo registrado con éxito en MySQL!",
@@ -77,7 +72,7 @@ namespace BiblioAPI.Controllers
             }
             catch (DbUpdateException dbEx)
             {
-                // Este bloque atrapa errores específicos de MySQL (Llaves foráneas rotas, columnas faltantes)
+                
                 var errorInterno = dbEx.InnerException != null ? dbEx.InnerException.Message : dbEx.Message;
                 return StatusCode(500, new
                 {
@@ -88,7 +83,7 @@ namespace BiblioAPI.Controllers
             }
             catch (Exception ex)
             {
-                // Atrapa cualquier otro tipo de error inesperado en el código C#
+                
                 return StatusCode(500, new
                 {
                     error = "Error interno del servidor (C#)",
@@ -97,9 +92,7 @@ namespace BiblioAPI.Controllers
             }
         }
 
-        // ==========================================
-        // 2. ENDPOINT: REPORTE MENSUAL (Para la Maestra)
-        // ==========================================
+        
         [HttpGet("reporte-mensual")]
         public async Task<IActionResult> GetReporteMensual()
         {
@@ -109,7 +102,7 @@ namespace BiblioAPI.Controllers
 
                 if (!prestamosEnMemoria.Any())
                 {
-                    return Ok(new List<object>()); // Si no hay préstamos, regresa una lista vacía limpia
+                    return Ok(new List<object>()); 
                 }
 
                 var datosConsumo = prestamosEnMemoria
@@ -133,9 +126,7 @@ namespace BiblioAPI.Controllers
             }
         }
 
-        // ==========================================
-        // 3. ENDPOINT: REPORTE POR PERIODO (Gráficos)
-        // ==========================================
+        
         [HttpGet("reporte-periodo")]
         public async Task<IActionResult> GetReportePorPeriodo([FromQuery] DateTime fechaInicio, [FromQuery] DateTime fechaFin)
         {
@@ -166,9 +157,7 @@ namespace BiblioAPI.Controllers
             }
         }
 
-        // ==========================================
-        // 4. ENDPOINT: DEVOLVER UN LIBRO
-        // ==========================================
+        
         [HttpPut("devolver/{id}")]
         public async Task<IActionResult> DevolverLibro(int id)
         {
@@ -208,7 +197,7 @@ namespace BiblioAPI.Controllers
         {
             try
             {
-                // Traemos los préstamos ordenados por fecha más reciente
+                
                 var prestamos = await _context.Set<Prestamo>()
                     .OrderByDescending(p => p.FechaPrestamo)
                     .Select(p => new
@@ -234,9 +223,7 @@ namespace BiblioAPI.Controllers
 
 
 
-    // ==========================================
-    // CLASE DTO: OBJETO DE TRANSFERENCIA DE DATOS
-    // ==========================================
+    
     public class SolicitudPrestamoDTO
     {
         public int UsuarioId { get; set; }
