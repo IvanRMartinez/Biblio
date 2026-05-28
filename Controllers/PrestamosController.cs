@@ -16,63 +16,65 @@ namespace BiblioAPI.Controllers
             _context = context;
         }
 
-        
+
         [HttpPost]
         public async Task<IActionResult> CrearPrestamo([FromBody] SolicitudPrestamoDTO peticion)
         {
-            
             try
             {
                 
-                if (peticion.UsuarioId <= 0 || peticion.LibroId <= 0)
+                if (peticion.UsuarioId <= 0 || string.IsNullOrWhiteSpace(peticion.NombreLibro))
                 {
-                    return BadRequest(new { mensaje = "El ID de usuario y el ID de libro deben ser números válidos mayores a 0." });
+                    return BadRequest(new { mensaje = "El ID de usuario debe ser mayor a 0 y el nombre del libro no puede estar vacío." });
+                }
+                var usuario = await _context.Set<Usuario>().FindAsync(peticion.UsuarioId);
+                if (usuario == null)
+                {
+                    return NotFound(new { mensaje = $"El alumno con ID {peticion.UsuarioId} no está registrado en el sistema." });
                 }
 
-                
-                var libro = await _context.Set<Libro>().FindAsync(peticion.LibroId);
+                string tituloBuscado = peticion.NombreLibro.ToLower().Trim();
+
+               
+                var libro = await _context.Set<Libro>()
+                    .FirstOrDefaultAsync(l => l.Titulo.ToLower().Trim() == tituloBuscado);
+
                 if (libro == null)
                 {
-                    return NotFound(new { mensaje = $"Error: El libro con ID {peticion.LibroId} no existe en el catálogo." });
+                    return NotFound(new { mensaje = $"Error: El libro '{peticion.NombreLibro}' no existe en el catálogo." });
                 }
 
-                
                 if (libro.Ejemplares <= 0)
                 {
                     return BadRequest(new { mensaje = $"Inventario insuficiente. El libro '{libro.Titulo}' tiene 0 ejemplares disponibles." });
                 }
 
-                
                 libro.Ejemplares -= 1;
 
-                
                 var nuevoPrestamo = new Prestamo
                 {
                     UsuarioId = peticion.UsuarioId,
-                    LibroId = peticion.LibroId,
+                    LibroId = libro.Id, 
                     FechaPrestamo = DateTime.Now,
-                    Estado = "Activo", 
-
-                    
+                    FechaLimite = DateTime.Now.AddDays(7), 
+                    Estado = "Activo",
                     Titulo = libro.Titulo,
                     Autor = libro.Autor
                 };
 
-                
                 _context.Set<Prestamo>().Add(nuevoPrestamo);
                 await _context.SaveChangesAsync();
 
-                
                 return Ok(new
                 {
-                    mensaje = "¡Préstamo registrado con éxito en MySQL!",
+                    mensaje = "¡Préstamo registrado con exito.",
                     libroPrestado = libro.Titulo,
+                    fechaVencimiento = nuevoPrestamo.FechaLimite, 
                     ejemplaresRestantes = libro.Ejemplares
                 });
             }
             catch (DbUpdateException dbEx)
             {
-                
                 var errorInterno = dbEx.InnerException != null ? dbEx.InnerException.Message : dbEx.Message;
                 return StatusCode(500, new
                 {
@@ -83,7 +85,6 @@ namespace BiblioAPI.Controllers
             }
             catch (Exception ex)
             {
-                
                 return StatusCode(500, new
                 {
                     error = "Error interno del servidor (C#)",
@@ -92,7 +93,7 @@ namespace BiblioAPI.Controllers
             }
         }
 
-        
+
         [HttpGet("reporte-mensual")]
         public async Task<IActionResult> GetReporteMensual()
         {
@@ -157,26 +158,37 @@ namespace BiblioAPI.Controllers
             }
         }
 
-        
-        [HttpPut("devolver/{id}")]
-        public async Task<IActionResult> DevolverLibro(int id)
+
+        [HttpPut("devolver")]
+        public async Task<IActionResult> DevolverLibro([FromBody] SolicitudPrestamoDTO peticion)
         {
             try
             {
-                var prestamo = await _context.Set<Prestamo>().FindAsync(id);
+                // 1. Validamos que no nos manden un texto vacío
+                if (string.IsNullOrWhiteSpace(peticion.NombreLibro))
+                {
+                    return BadRequest(new { mensaje = "El nombre del libro no puede estar vacío." });
+                }
+
+                // 2. Preparamos el texto que mandó React (minúsculas y sin espacios a los lados)
+                string tituloBuscado = peticion.NombreLibro.ToLower().Trim();
+
+                // 3. Buscamos en MySQL aplicando el mismo filtro a la columna Titulo
+                var prestamo = await _context.Set<Prestamo>()
+                    .FirstOrDefaultAsync(p => p.UsuarioId == peticion.UsuarioId
+                                           && p.Estado == "Activo"
+                                           && p.Titulo.ToLower().Trim() == tituloBuscado); 
+
                 if (prestamo == null)
                 {
-                    return NotFound(new { mensaje = "El registro de préstamo no existe." });
+                    return NotFound(new { mensaje = $"No se encontró un préstamo activo del libro '{peticion.NombreLibro}' para el usuario {peticion.UsuarioId}." });
                 }
 
-                if (prestamo.Estado == "Devuelto")
-                {
-                    return BadRequest(new { mensaje = "Este libro ya fue devuelto anteriormente." });
-                }
-
+                // 4. Procesamos la devolución normal
                 prestamo.Estado = "Devuelto";
                 prestamo.FechaDevolucion = DateTime.Now;
 
+                // 5. Devolvemos el ejemplar al inventario usando el ID que el préstamo ya tenía guardado
                 var libro = await _context.Set<Libro>().FindAsync(prestamo.LibroId);
                 if (libro != null)
                 {
@@ -184,7 +196,7 @@ namespace BiblioAPI.Controllers
                 }
 
                 await _context.SaveChangesAsync();
-                return Ok(new { mensaje = "Libro devuelto correctamente. Inventario de ejemplares actualizado." });
+                return Ok(new { mensaje = "Libro devuelto correctamente.." });
             }
             catch (Exception ex)
             {
@@ -197,16 +209,17 @@ namespace BiblioAPI.Controllers
         {
             try
             {
-                
                 var prestamos = await _context.Set<Prestamo>()
                     .OrderByDescending(p => p.FechaPrestamo)
                     .Select(p => new
                     {
                         id = p.Id,
                         usuarioId = p.UsuarioId,
+                        nombreUsuario = p.Usuario.NombreCompleto, 
                         libroId = p.LibroId,
                         titulo = p.Titulo ?? "Libro sin título",
                         fechaPrestamo = p.FechaPrestamo,
+                        fechaVencimiento = p.FechaLimite, 
                         fechaDevolucion = p.FechaDevolucion,
                         estado = p.Estado
                     })
@@ -224,9 +237,5 @@ namespace BiblioAPI.Controllers
 
 
     
-    public class SolicitudPrestamoDTO
-    {
-        public int UsuarioId { get; set; }
-        public int LibroId { get; set; }
-    }
+    
 }
